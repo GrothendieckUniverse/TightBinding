@@ -125,11 +125,9 @@ function plot_real_space_tightbinding_model(tb_model::Real_Space_TightBinding_Mo
         _ => error("The dimension of the lattice must be 2 or 3!")
     end
 
-    # plot all sites
+    # plot all sites, with color by sublattice index
     for (((cell_int), i_sub), i_site) in l.site_pos_to_index_map
         site_cart = l.site_cart_list[i_site]
-
-        # color-coded by sublattice
         CairoMakie.scatter!(ax, site_cart...; markersize=20, color=CairoMakie.Cycled(i_sub))
     end
 

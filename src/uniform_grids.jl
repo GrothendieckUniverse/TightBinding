@@ -1,13 +1,13 @@
 """
-Struct `Uniform_Grids{T,U}`
+Struct `Uniform_Grids{T,U}` (Mostly for Momentum-space Grids)
 ---
-mostly for k-space lattice. It can either be constructed independently, or from the real-space lattice with all-direction periodic boundary conditions. Note: for the latter case the real-space sublattice degrees of freedom are transferred to the dimension of the single-particle k-space Hamiltonian, which should be handled elsewhere.
+It can either be constructed independently, or from the real-space lattice with all-direction periodic boundary conditions. Note: for the latter case the real-space sublattice degrees of freedom are transferred to the dimension of the single-particle k-space Hamiltonian, which should be handled elsewhere.
 - Fields: 
     - `name::String`: name of the uniform grid
     - `dim::Int`: dimension of the uniform grid
     - `sample_size::Vector{Int}`
     - `basis_vec_list::Vector{<:Vector}`: for k-space lattice, this is just the reciprocal vectors
-    - `cell_volume::T`: volume of the unit cell for the uniform grid (please distinguish from the real space cell-volume when the uniform grid is for momentum space!)
+    - `cell_volume::T`: volume of the unit cell for the uniform grid (please distinguish it from the real space cell-volume)
     - `twisted_phases_over_2π::Vector{U}`: twisted phases (over 2π). This will shift the `site_crys_list` as well as `site_cart_list`
     - `site_int_list::Vector{Vector{Int}}`
     - `site_int_to_index_map::Dict{Vector{Int},Int}`: hashmap `site_int -> i_site`
@@ -76,33 +76,6 @@ function initialize_uniform_grids(;
     )
 end
 
-"""
-Get Dual Basis Vector Matrix from a Given Basis Vector Matrix
----
-satisfying the relation `dual_basis_vec_mat' * basis_vec_mat = 2π * I`, where both matrix should be stored in _columns_, i.e., `basis_vec_mat = [v1 v2 ...]`. 
-
-This method can be useful to tranform from real-space basis to momentum-space basis, or vice versa.
-- Args:
-    - `basis_vec_mat::Matrix{T}`
-"""
-@inline function dual_basis_vec_mat(basis_vec_mat::Matrix{T})::Matrix{T} where T<:Number
-    return 2π * inv(basis_vec_mat)'
-end
-
-"""
-Get Dual Basis Vector List from a Given Basis Vector List
----
-using the method `dual_basis_vec_mat()` to satisfy the relation `dual_basis_vec_mat' * basis_vec_mat = 2π * I`, where both matrix should be stored in _columns_, i.e., `basis_vec_mat = [v1 v2 ...]`.
-
-This method can be useful to tranform from real-space basis to momentum-space basis, or vice versa.
-- Args:
-    - `basis_vec_list::Vector{<:Vector}`: bravais vectors for real-space lattice, or reciprocal vectors for k-space lattice
-"""
-@inline function dual_basis_vec_list(basis_vec_list::Vector{Vector{T}})::Vector{Vector{T}} where T<:Number
-    basis_vec_mat = reduce(hcat, basis_vec_list) # force `basis_vec` to be stored in columns in `basis_vec_mat`
-    return eachcol(dual_basis_vec_mat(basis_vec_mat)) .|> collect # clone to create a `Vector{Vector{T}}`
-end
-
 
 """
 Constructor of `Uniform_Grids`
@@ -133,7 +106,7 @@ function initialize_uniform_grids(
     site_crys_list = [((site_int + twisted_phases_over_2π) ./ sample_size) for site_int in site_int_list]
     site_cart_list = [sum(site_crys .* basis_vec_list) for site_crys in site_crys_list]
 
-    return Uniform_Grids{typeof(r_data.cell_volume),T}(
+    return Uniform_Grids{typeof(r_data.cell_volume),U}(
         r_data.lattice_name,
         dim,
         sample_size,

@@ -6,7 +6,6 @@ using CairoMakie
 using Test
 
 
-
 include("real_space_lattice.jl")
 export Real_Space_Lattice, initialize_real_space_lattice
 
@@ -17,10 +16,10 @@ include("uniform_grids.jl")
 export Uniform_Grids, initialize_uniform_grids
 
 include("utils.jl")
-export dual_basis_vec_mat, dual_basis_vec_list, plot_bands
+export dual_basis_vec_mat, dual_basis_vec_list
 
-
-
+include("band_plot.jl")
+export plot_bands, plot_band_counter, find_1st_BZ_k_cart_list
 
 
 

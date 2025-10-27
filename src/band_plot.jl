@@ -161,7 +161,8 @@ function plot_band_contour(hk_cart::Function, k_data::Uniform_Grids;
     k_cart_ranges::Vector{<:StepRangeLen}=[-1.5π:0.05:1.5π, -1.5π:0.05:1.5π],
     levels::Int=10,
     band_idx::Int=1,
-    show_BZ::Bool=true
+    show_BZ::Bool=true,
+    show_band_width_band_gap_info::Bool=true
 )::CairoMakie.Figure
     @assert k_data.dim == 2 "Only 2D systems are supported for band contour plot!"
     @assert length(k_cart_ranges) == 2 "The length of `k_cart_ranges` must be 2 for 2D systems!"
@@ -170,14 +171,28 @@ function plot_band_contour(hk_cart::Function, k_data::Uniform_Grids;
 
     n_kx = length(kx_range)
     n_ky = length(ky_range)
-    energy_spec = zeros(Float64, n_kx, n_ky)
-    for (i_kx, kx) in enumerate(kx_range)
-        for (i_ky, ky) in enumerate(ky_range)
-            k_cart = [kx, ky]
-            Hk_mat = hk_cart(k_cart)
-            @assert norm(Hk_mat - Hk_mat') < 1.0E-10 "The Hamiltonian matrix is not Hermitian at k-point $(k_cart)!"
 
-            energy_spec[i_kx, i_ky] = eigen(Hermitian(Hk_mat)).values[band_idx]
+    nband = size(hk_cart([0.1, 0.2]))[1]
+    energy_spec = Vector{Matrix{Float64}}(undef, nband)
+    for n in 1:nband
+        eigvals_mat = zeros(Float64, n_kx, n_ky)
+        for (i_kx, kx) in enumerate(kx_range)
+            for (i_ky, ky) in enumerate(ky_range)
+                k_cart = [kx, ky]
+                Hk_mat = hk_cart(k_cart)
+                @assert norm(Hk_mat - Hk_mat') < 1.0E-10 "The Hamiltonian matrix is not Hermitian at k-point $(k_cart)!"
+
+                eigvals_mat[i_kx, i_ky] = eigen(Hermitian(Hk_mat)).values[n]
+            end
+        end
+        energy_spec[n] = eigvals_mat
+    end
+
+    if show_band_width_band_gap_info
+        for n in 1:(nband-1)
+            (current_band_min, current_band_max) = (minimum(energy_spec[n]), maximum(energy_spec[n]))
+            (next_band_min, next_band_max) = (minimum(energy_spec[n+1]), maximum(energy_spec[n+1]))
+            @info "band $(n) width: $(current_band_max - current_band_min),\t band gap to band $(n+1): $(next_band_min - current_band_max)"
         end
     end
 
@@ -186,7 +201,7 @@ function plot_band_contour(hk_cart::Function, k_data::Uniform_Grids;
         backgroundcolor=:transparent,
         xlabel="kx", ylabel="ky",
     )
-    p = CairoMakie.contourf!(ax, kx_range, ky_range, energy_spec; colormap=:viridis, levels=levels)
+    p = CairoMakie.contourf!(ax, kx_range, ky_range, energy_spec[band_idx]; colormap=:viridis, levels=levels)
     CairoMakie.Colorbar(fig[1, 2], p)
     colsize!(fig.layout, 1, Aspect(1, 1.0))
     # resize_to_layout!(fig)

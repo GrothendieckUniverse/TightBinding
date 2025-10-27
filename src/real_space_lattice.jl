@@ -13,9 +13,9 @@ Struct `Real_Space_Lattice{T}`
     - `sub_crys_list::Vector{<:Vector}`: list of sublattice positions _in crystal coordinates_ (it can be _symbolic_ such as `MathExpr` from `YAN.jl`)
     - `sub_name_list::Vector{String}`: list of sublattice names
     - `nsite::Int`: total number of sites in the lattice
-    - `site_pos_list::Vector{Tuple{Vector{Int},Int}}`: list of site positions in each cell as `(cell_int, i_sub)`
+    - `site_list::Vector{Tuple{Vector{Int},Int}}`: list of site positions in each cell as `(cell_int, i_sub)`
     - `site_cart_list::Vector{<:Vector}`: list of site positions in cartesian coordinates (it can be _symbolic_ such as `MathExpr` from `YAN.jl`)
-    - `site_pos_to_index_map::Dict{Tuple{Vector{Int},Int},Int}`: hashmap `(cell_int, i_sub) -> i_site`
+    - `site_to_index_map::Dict{Tuple{Vector{Int},Int},Int}`: hashmap `(cell_int, i_sub) -> i_site`
 """
 mutable struct Real_Space_Lattice{T}
     lattice_name::String
@@ -33,9 +33,9 @@ mutable struct Real_Space_Lattice{T}
     sub_name_list::Vector{String}
 
     nsite::Int
-    site_pos_list::Vector{Tuple{Vector{Int},Int}} # site positions in each cell as `(cell_int, i_sub)`
+    site_list::Vector{Tuple{Vector{Int},Int}} # site positions in each cell as `(cell_int, i_sub)`
     site_cart_list::Vector{<:Vector} # site positions in cartesian coordinates
-    site_pos_to_index_map::Dict{Tuple{Vector{Int},Int},Int} # hashmap `(cell_int, i_sub) -> i_site`
+    site_to_index_map::Dict{Tuple{Vector{Int},Int},Int} # hashmap `(cell_int, i_sub) -> i_site`
 end
 
 
@@ -77,11 +77,11 @@ function initialize_real_space_lattice(;
     @assert all(length.(sub_crys_list) == [dim for _ in 1:nsub])
     sub_name_list::Vector{String} = [string("A", i) for i in 1:nsub] # the default name 
 
-    site_pos_list = [(cell_int, i_sub) for cell_int in cell_int_list for i_sub in 1:nsub]
-    nsite = length(site_pos_list)
-    site_cart_list = [sum(brav_vec_list .* (cell_int + sub_crys_list[i_sub])) for (cell_int, i_sub) in site_pos_list]
+    site_list = [(cell_int, i_sub) for cell_int in cell_int_list for i_sub in 1:nsub]
+    nsite = length(site_list)
+    site_cart_list = [sum(brav_vec_list .* (cell_int + sub_crys_list[i_sub])) for (cell_int, i_sub) in site_list]
 
-    site_pos_to_index_map = Dict(zip(site_pos_list, 1:nsite))
+    site_to_index_map = Dict(zip(site_list, 1:nsite))
 
     return Real_Space_Lattice(
         lattice_name,
@@ -95,8 +95,8 @@ function initialize_real_space_lattice(;
         sub_crys_list,
         sub_name_list,
         nsite,
-        site_pos_list,
+        site_list,
         site_cart_list,
-        site_pos_to_index_map,
+        site_to_index_map,
     )
 end

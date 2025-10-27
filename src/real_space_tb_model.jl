@@ -126,15 +126,15 @@ function plot_real_space_tightbinding_model(tb_model::Real_Space_TightBinding_Mo
     end
 
     # plot all sites, with color by sublattice index
-    for (((cell_int), i_sub), i_site) in l.site_pos_to_index_map
+    for (((cell_int), i_sub), i_site) in l.site_to_index_map
         site_cart = l.site_cart_list[i_site]
         CairoMakie.scatter!(ax, site_cart...; markersize=20, color=CairoMakie.Cycled(i_sub))
     end
 
     # plot all real-space hoppings
     for (((cell_from, sub_from), (cell_to, sub_to)), t) in tb_model.full_hopping_map
-        hopping_from_site_cart = l.site_cart_list[l.site_pos_to_index_map[(cell_from, sub_from)]]
-        hopping_to_site_cart = l.site_cart_list[l.site_pos_to_index_map[(cell_to, sub_to)]]
+        hopping_from_site_cart = l.site_cart_list[l.site_to_index_map[(cell_from, sub_from)]]
+        hopping_to_site_cart = l.site_cart_list[l.site_to_index_map[(cell_to, sub_to)]]
 
         hopping_site_components = [reduce(hcat, [hopping_from_site_cart, hopping_to_site_cart])[d, :] for d in 1:l.dim] |> collect
         CairoMakie.lines!(ax, hopping_site_components...; linewidth=4, color=(:black, 0.3))

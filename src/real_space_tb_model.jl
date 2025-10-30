@@ -72,39 +72,62 @@ function add_hopping_term!(
 ) where T
     nsub = tb_model.lattice.nsub
 
-    let (((cell_from, sub_from), (cell_to, sub_to)), hopping_strength) = input_hopping_term
+    # update the `input_hopping_map` (if is hermitian, also add the hermitian conjugate)
+    let ((site_from, site_to), hopping_strength) = input_hopping_term
+        (cell_from, sub_from) = site_from
+        (cell_to, sub_to) = site_to
+
         # check the validity of input hopping term
         @assert sub_from in 1:nsub && sub_to in 1:nsub "The input sublattice indices for `input_hopping_map`=$(input_hopping_term) is invalid for `sample_size`=$(tb_model.lattice.sample_size)!"
         # @assert all(0 .<= cell_from .<= (tb_model.lattice.sample_size .- 1)) && all(0 .<= cell_to .<= (tb_model.lattice.sample_size .- 1)) "The input cell indices for `input_hopping_map`=$(input_hopping_term) is invalid for `sample_size`=$(tb_model.lattice.sample_size)!"
 
-        if haskey(tb_model.input_hopping_map, ((cell_from, sub_from), (cell_to, sub_to)))
-            @warn "The input hopping term `$(input_hopping_term)` already exists in `input_hopping_map`! The old hopping term will be overwritten!"
+        if haskey(tb_model.input_hopping_map, (site_from, site_to))
+            @error "The input hopping term `$(input_hopping_term)` already exists in `input_hopping_map`!\n --- The old hopping term will be overwritten, rather than being added to the existing value!"
         end
+        tb_model.input_hopping_map[(site_from, site_to)] = hopping_strength
 
-        tb_model.input_hopping_map[((cell_from, sub_from), (cell_to, sub_to))] = hopping_strength
         if is_hermitian
-            tb_model.input_hopping_map[((cell_to, sub_to), (cell_from, sub_from))] = conj(hopping_strength)
-        end
-
-        # generate all bulk hopping terms using translation symmetry
-        cell_diff = cell_to - cell_from
-        for cell_int in tb_model.lattice.cell_int_list
-            new_cell_from = cell_int
-            new_cell_to = cell_int + cell_diff
-            for i in 1:tb_model.lattice.dim
-                if tb_model.pbc_indicator[i] # handle periodic boundary condition
-                    new_cell_to[i] = new_cell_to[i] % tb_model.lattice.sample_size[i]
-                end
-            end
-            if all(0 .<= new_cell_to .<= (tb_model.lattice.sample_size .- 1))
-                tb_model.full_hopping_map[((new_cell_from, sub_from), (new_cell_to, sub_to))] = hopping_strength
-                if is_hermitian
-                    tb_model.full_hopping_map[((new_cell_to, sub_to), (new_cell_from, sub_from))] = conj(hopping_strength)
-                end
+            if haskey(tb_model.input_hopping_map, (site_to, site_from))
+                tb_model.input_hopping_map[(site_to, site_from)] += conj(hopping_strength)
+            else
+                tb_model.input_hopping_map[(site_to, site_from)] = conj(hopping_strength)
             end
         end
-        return nothing
     end
+
+    # rebuild the `full_hopping_map` using translation symmetry
+    let ((site_from, site_to), hopping_strength) = input_hopping_term
+        (cell_from, sub_from) = site_from
+        (cell_to, sub_to) = site_to
+
+        cell_shift = cell_to - cell_from
+        for new_cell_from in tb_model.lattice.cell_int_list
+            new_cell_to = new_cell_from + cell_shift
+            @inbounds for i in eachindex(tb_model.pbc_indicator)
+                if tb_model.pbc_indicator[i] # handle periodic boundary condition
+                    new_cell_to[i] = mod(new_cell_to[i], tb_model.lattice.sample_size[i])
+                end
+            end
+
+            new_site_from = (new_cell_from, sub_from)
+            new_site_to = (new_cell_to, sub_to)
+
+            if haskey(tb_model.full_hopping_map, (new_site_from, new_site_to))
+                tb_model.full_hopping_map[(new_site_from, new_site_to)] += hopping_strength
+            else
+                tb_model.full_hopping_map[(new_site_from, new_site_to)] = hopping_strength
+            end
+
+            if is_hermitian
+                if haskey(tb_model.full_hopping_map, (new_site_to, new_site_from))
+                    tb_model.full_hopping_map[(new_site_to, new_site_from)] += conj(hopping_strength)
+                else
+                    tb_model.full_hopping_map[(new_site_to, new_site_from)] = conj(hopping_strength)
+                end
+            end
+        end
+    end
+    return nothing
 end
 
 """

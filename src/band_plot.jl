@@ -161,12 +161,21 @@ function plot_band_contour(hk_cart::Function, k_data::Uniform_Grids;
     k_cart_ranges::Vector{<:StepRangeLen}=[-1.5π:0.05:1.5π, -1.5π:0.05:1.5π],
     levels::Int=10,
     band_idx::Int=1,
+    normalize_k_cart_range_with_lattice_constant::Bool=true,
     show_BZ::Bool=true,
     show_band_width_band_gap_info::Bool=true
 )::CairoMakie.Figure
     @assert k_data.dim == 2 "Only 2D systems are supported for band contour plot!"
     @assert length(k_cart_ranges) == 2 "The length of `k_cart_ranges` must be 2 for 2D systems!"
 
+    if normalize_k_cart_range_with_lattice_constant
+        brav_vec_list = dual_basis_vec_list(k_data.basis_vec_list)
+        a = norm(brav_vec_list[1])
+        if !(a ≈ 1.0)
+            k_cart_ranges = [(r ./ a) for r in k_cart_ranges]
+            @info "Normalized `k_cart_range` by the lattice constant a=$(a). New ranges: $(k_cart_ranges)"
+        end
+    end
     (kx_range, ky_range) = k_cart_ranges
 
     n_kx = length(kx_range)

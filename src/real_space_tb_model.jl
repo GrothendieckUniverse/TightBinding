@@ -70,7 +70,7 @@ function add_hopping_term!(
     input_hopping_term::Pair{Tuple{Tuple{Vector{Int64},Int64},Tuple{Vector{Int64},Int64}},T};
     is_hermitian::Bool=true,
 ) where T
-    nsub = tb_model.lattice.nsub
+    n_sub = tb_model.lattice.n_sub
 
     # update the `input_hopping_map` (if is hermitian, also add the hermitian conjugate)
     let ((site_from, site_to), hopping_strength) = input_hopping_term
@@ -78,7 +78,7 @@ function add_hopping_term!(
         (cell_to, sub_to) = site_to
 
         # check the validity of input hopping term
-        @assert sub_from in 1:nsub && sub_to in 1:nsub "The input sublattice indices for `input_hopping_map`=$(input_hopping_term) is invalid for `sample_size`=$(tb_model.lattice.sample_size)!"
+        @assert sub_from in 1:n_sub && sub_to in 1:n_sub "The input sublattice indices for `input_hopping_map`=$(input_hopping_term) is invalid for `sample_size`=$(tb_model.lattice.sample_size)!"
         # @assert all(0 .<= cell_from .<= (tb_model.lattice.sample_size .- 1)) && all(0 .<= cell_to .<= (tb_model.lattice.sample_size .- 1)) "The input cell indices for `input_hopping_map`=$(input_hopping_term) is invalid for `sample_size`=$(tb_model.lattice.sample_size)!"
 
         if haskey(tb_model.input_hopping_map, (site_from, site_to))

@@ -56,8 +56,9 @@ Constructor for `Real_Space_Lattice`
     - `brav_vec_list::Vector{<:Vector}`: list of bravais vectors for real-space lattice
     - `sample_size::Vector{Int}`: number of unit cells in each direction
     - `sub_crys_list::Vector{<:Vector}`: list of sublattice positions _in crystal coordinates_
-    - `lattice_name::String`: name of lattice. If this is set to be `"square"`, `"honeycomb"`, `"kagome"`, and `"Lieb"`, it will override the above three arguments with the corresponding default values.)
+    - `lattice_name::String`: name of lattice. If this is set to be `"square"`, `"honeycomb"`, `"kagome"`, `"Lieb"`, or `"dice"`, it will override the above three arguments with the corresponding default values.)
     - `pbc_indicator::Vector{Bool}`: whether to apply periodic boundary condition in direction-i
+    - `allowed_bonds::Union{Nothing, Vector{Tuple{Int,Int}}}`: optional list of _allowed_ sublattice pairs `(sub_i, sub_j)` for graph construction. When `nothing` (default), all pairs are allowed (original Euclidean-distance algorithm). When provided, only edges between the specified sublattice pairs are filtered out. Indices are 1-based sublattice indices matching `sub_crys_list`.
 """
 function initialize_real_space_lattice(;
     brav_vec_list::Vector{<:Vector}=[[1.0, 0.0], [0.0, 1.0]],
@@ -65,13 +66,15 @@ function initialize_real_space_lattice(;
     sub_crys_list::Vector{<:Vector}=[[0.0, 0.0]],
     lattice_name::String="",
     pbc_indicator::Vector{Bool}=[true, true],
+    allowed_bonds::Union{Nothing,Vector{Tuple{Int,Int}}}=nothing,
 )::Real_Space_Lattice
-    (brav_vec_list, sub_crys_list) = @match lattice_name begin
-        "square" => ([[1.0, 0.0], [0.0, 1.0]], [[0.0, 0.0]])
-        "honeycomb" => ([[1.0, 0.0], [1 / 2, sqrt(3) / 2]], [[0.0, 0.0], [1 / 3, 1 / 3]])
-        "kagome" => ([[1.0, 0.0], [1 / 2, sqrt(3) / 2]], [[0.0, 0.0], [1 / 2, 0], [0, 1 / 2]])
-        "Lieb" => ([[1.0, 0.0], [0.0, 1.0]], [[0.0, 0.0], [1 / 2, 0], [0, 1 / 2]])
-        _ => (brav_vec_list, sub_crys_list)
+    (brav_vec_list, sub_crys_list, allowed_bonds) = @match lattice_name begin
+        "square" => ([[1.0, 0.0], [0.0, 1.0]], [[0.0, 0.0]], allowed_bonds)
+        "honeycomb" => ([[1.0, 0.0], [1 / 2, sqrt(3) / 2]], [[0.0, 0.0], [1 / 3, 1 / 3]], allowed_bonds)
+        "kagome" => ([[1.0, 0.0], [1 / 2, sqrt(3) / 2]], [[0.0, 0.0], [1 / 2, 0], [0, 1 / 2]], allowed_bonds)
+        "Lieb" => ([[1.0, 0.0], [0.0, 1.0]], [[0.0, 0.0], [1 / 2, 0], [0, 1 / 2]], allowed_bonds)
+        "dice" => ([[1.0, 0.0], [1 / 2, sqrt(3) / 2]], [[0.0, 0.0], [1 / 3, 1 / 3], [2 / 3, 2 / 3]], [(1, 2), (2, 3)])
+        _ => (brav_vec_list, sub_crys_list, allowed_bonds)
     end
     dim = length(brav_vec_list)
 
@@ -101,11 +104,13 @@ function initialize_real_space_lattice(;
     graph::Union{Nothing,Graphs.SimpleGraph} =
         try
             brav_vec_list_num = convert.(Vector{Float64}, brav_vec_list)
-            sub_crys_list_num = convert.(Vector{Float64}, sub_crys_list)
             site_crys_list = convert.(Vector{Float64}, site_crys_list)
 
             _build_nearest_neighbor_graph_by_Euclidean_distance(;
-                site_crys_list=site_crys_list, brav_vec_list=brav_vec_list_num, sample_size=sample_size, pbc_indicator=pbc_indicator
+                site_crys_list=site_crys_list, site_list=site_list,
+                brav_vec_list=brav_vec_list_num, sample_size=sample_size,
+                pbc_indicator=pbc_indicator,
+                allowed_bonds=allowed_bonds,
             )
         catch
             nothing
@@ -161,23 +166,49 @@ Build the Nearest-Neighbor Graph by Minimal Euclidean Distance
 ---
 For each site, we first search for the minimum distance between any two distinct sites, then connect pairs whose distance falls within that value.
 - Named Args:
-    - `site_crys_list::Vector{Vector{Float64}}`: site crystal coodiate list
+    - `site_crys_list::Vector{Vector{Float64}}`: site crystal coordinate list
+    - `site_list::Vector{Site}`: site list with `(cell_int, i_sub)` for each site
     - `brav_vec_list::Vector{Vector{Float64}}`: bravais vectors
     - `sample_size::Vector{Int}`: sample size
     - `pbc_indicator::Vector{Bool}`: boundary conditions indicator
+    - `allowed_bonds::Union{Nothing, Vector{Tuple{Int,Int}}}`: optional list of allowed sublattice pairs `(sub_i, sub_j)`. When provided, only edges between the specified sublattice pairs are considered. The pair is checked symmetrically: `(a,b)` allows both `a→b` and `b→a`. When `nothing`, all pairs are allowed.
 """
 function _build_nearest_neighbor_graph_by_Euclidean_distance(;
     site_crys_list::Vector{Vector{Float64}},
+    site_list::Vector{Site},
     brav_vec_list::Vector{Vector{Float64}},
     sample_size::Vector{Int},
     pbc_indicator::Vector{Bool},
+    allowed_bonds::Union{Nothing,Vector{Tuple{Int,Int}}}=nothing,
 )::Graphs.SimpleGraph
     n_site = length(site_crys_list)
 
-    # Pass 1: find the nearest-neighbour distance
+    # Build a set of allowed sublattice pairs (symmetric) for fast lookup
+    allowed_pairs::Union{Nothing,Set{Tuple{Int,Int}}} =
+        if isnothing(allowed_bonds)
+            nothing
+        else
+            s = Set{Tuple{Int,Int}}()
+            for (a, b) in allowed_bonds
+                push!(s, (a, b))
+                push!(s, (b, a))
+            end
+            s
+        end
+
+    @inline function _is_pair_allowed(i::Int, j::Int)::Bool
+        isnothing(allowed_pairs) && return true
+        sub_i = site_list[i][2]
+        sub_j = site_list[j][2]
+        return (sub_i, sub_j) in allowed_pairs
+    end
+
+    # Pass 1: find the nearest-neighbour distance (only among allowed pairs)
     nn_dist = Inf
     for i in 1:n_site
         for j in (i+1):n_site
+            _is_pair_allowed(i, j) || continue
+
             Δ_crys = site_crys_list[j] - site_crys_list[i]
             _wrap_Δ_crys!(Δ_crys;
                 sample_size=sample_size, pbc_indicator=pbc_indicator
@@ -199,6 +230,8 @@ function _build_nearest_neighbor_graph_by_Euclidean_distance(;
     threshold = nn_dist * (1.0 + 1.0E-10)
     for i in 1:n_site
         for j in (i+1):n_site
+            _is_pair_allowed(i, j) || continue
+
             Δ_crys = site_crys_list[j] - site_crys_list[i]
             _wrap_Δ_crys!(Δ_crys;
                 sample_size=sample_size, pbc_indicator=pbc_indicator
@@ -246,7 +279,7 @@ function plot_real_space_lattice(
     site_cart = to_cart.(site_crys)
 
     # --- figure & axis --------------------------------------------------------
-    default_fig_size = [800, 800]
+    default_fig_size = [1200, 1200]
     scaled_fig_size = sqrt(reduce(*, lattice.sample_size)) / 6 * default_fig_size |> Tuple
     @info "scaled_fig_size: $scaled_fig_size"
     fig = CairoMakie.Figure(size=scaled_fig_size, backgroundcolor=:transparent)
@@ -255,11 +288,11 @@ function plot_real_space_lattice(
     )
 
     # --- plot edges -----------------------------------------------------------
-    default_marker_size = 20
-    scaled_marker_size = default_marker_size * sqrt(reduce(*, lattice.sample_size)) / 8
+    scaled_marker_size = 20
+    # scaled_marker_size *= sqrt(reduce(*, lattice.sample_size)) / 8
     @info "scaled_marker_size: $scaled_marker_size"
-    default_font_size = 10
-    scaled_font_size = default_font_size * sqrt(reduce(*, lattice.sample_size)) / 10
+    scaled_font_size = 10
+    # scaled_font_size *= sqrt(reduce(*, lattice.sample_size)) / 10
     @info "scaled_font_size: $scaled_font_size"
     if !isnothing(lattice.graph)
         g = lattice.graph
@@ -354,11 +387,11 @@ function plot_real_space_lattice(
     # bravais basis vectors
     CairoMakie.arrows2d!(ax,
         [origin[1]], [origin[2]], [a1[1]], [a1[2]];
-        color=(:tomato, 0.64), shaftwidth=2.4, tipwidth=12, tiplength=24
+        color=(:tomato, 0.64), shaftwidth=2.4, tipwidth=12, tiplength=18
     )
     CairoMakie.arrows2d!(ax,
         [origin[1]], [origin[2]], [a2[1]], [a2[2]];
-        color=(:tomato, 0.64), shaftwidth=2.4, tipwidth=12, tiplength=24
+        color=(:tomato, 0.64), shaftwidth=2.4, tipwidth=12, tiplength=18
     )
 
 

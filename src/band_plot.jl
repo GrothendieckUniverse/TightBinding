@@ -62,7 +62,7 @@ function plot_bands(
     end
 
     ax = CairoMakie.Axis(fig[1, 1],
-        backgroundcolor=:transparent,
+        # backgroundcolor=:transparent,
         aspect=1.6,
         xticks=vline_ticks,
     )
@@ -81,7 +81,7 @@ function plot_bands(
         CairoMakie.vlines!(ax, vline_pos; color=(:black, 0.3), linewidth=4)
     end
 
-    display(fig)
+    # display(fig)
     return fig
 end
 

@@ -16,6 +16,7 @@ Struct `Real_Space_Lattice{T}`
     - `sub_crys_list::Vector{<:Vector}`: list of sublattice positions _in crystal coordinates_ (it can be _symbolic_ such as `MathExpr` from `YAN.jl`)
     - `sub_name_list::Vector{String}`: list of sublattice names
     - `pbc_indicator::Vector{Bool}`: whether to apply periodic boundary condition in direction-i
+    - `twisted_phase_over_2π::Vector{Float64}`: twisted phases φ/(2π) along each periodic direction. Non-zero values are only allowed where `pbc_indicator[d] == true`. Inserting fluxes is equivalent to shifting the crystal momentum grid by φ/L.
     - `n_site::Int`: total number of sites in the lattice
     - `site_list::Vector{Site}`: list of site positions in each cell as `(cell_int, i_sub)`
     - `site_cart_list::Vector{<:Vector}`: list of site positions in cartesian coordinates (it can be _symbolic_ such as `MathExpr` from `YAN.jl`)
@@ -39,6 +40,8 @@ mutable struct Real_Space_Lattice{T}
 
     pbc_indicator::Vector{Bool} # whether to apply periodic boundary condition in direction-i
 
+    twisted_phase_over_2π::Vector{Float64} # twisted phases φ/(2π); non-zero only where pbc[d]==true
+
     n_site::Int
     site_list::Vector{Site} # site positions in each cell as `(cell_int, i_sub)`
     site_crys_list::Vector{<:Vector} # site positions in crystal coordinates
@@ -58,6 +61,7 @@ Constructor for `Real_Space_Lattice`
     - `sub_crys_list::Vector{<:Vector}`: list of sublattice positions _in crystal coordinates_
     - `lattice_name::String`: name of lattice. If this is set to be `"square"`, `"honeycomb"`, `"kagome"`, `"Lieb"`, or `"dice"`, it will override the above three arguments with the corresponding default values.)
     - `pbc_indicator::Vector{Bool}`: whether to apply periodic boundary condition in direction-i
+    - `twisted_phase_over_2π::Vector{Float64}`: twisted phases φ/(2π) along each periodic direction. Non-zero values only where `pbc_indicator[d]==true`. Defaults to all zeros.
     - `allowed_bonds::Union{Nothing, Vector{Tuple{Int,Int}}}`: optional list of _allowed_ sublattice pairs `(sub_i, sub_j)` for graph construction. When `nothing` (default), all pairs are allowed (original Euclidean-distance algorithm). When provided, only edges between the specified sublattice pairs are filtered out. Indices are 1-based sublattice indices matching `sub_crys_list`.
 """
 function initialize_real_space_lattice(;
@@ -66,6 +70,7 @@ function initialize_real_space_lattice(;
     sub_crys_list::Vector{<:Vector}=[[0.0, 0.0]],
     lattice_name::String="",
     pbc_indicator::Vector{Bool}=[true, true],
+    twisted_phase_over_2π::Vector{Float64}=Float64[],
     allowed_bonds::Union{Nothing,Vector{Tuple{Int,Int}}}=nothing,
 )::Real_Space_Lattice
     (brav_vec_list, sub_crys_list, allowed_bonds) = @match lattice_name begin
@@ -77,6 +82,18 @@ function initialize_real_space_lattice(;
         _ => (brav_vec_list, sub_crys_list, allowed_bonds)
     end
     dim = length(brav_vec_list)
+
+    # --- validate twisted_phase_over_2π -------------------------------------
+    if isempty(twisted_phase_over_2π)
+        twisted_phase_over_2π = zeros(Float64, dim)
+    end
+    @assert length(twisted_phase_over_2π) == dim "twisted_phase_over_2π must have length = dim = $dim."
+    for d in 1:dim
+        if !pbc_indicator[d] && twisted_phase_over_2π[d] != 0.0
+            error("twisted_phase_over_2π[$d] = $(twisted_phase_over_2π[d]) is non-zero, but pbc_indicator[$d] = false. " *
+                  "Twisted phases are only allowed along periodic directions.")
+        end
+    end
 
     brav_vec_mat = reduce(hcat, brav_vec_list) # `hcat()` forces `brav_vec` to be stored in columns in `brav_vec_mat`
     cell_volume = abs(det(brav_vec_mat))
@@ -128,6 +145,7 @@ function initialize_real_space_lattice(;
         sub_crys_list,
         sub_name_list,
         pbc_indicator,
+        twisted_phase_over_2π,
         n_site,
         site_list,
         site_crys_list,

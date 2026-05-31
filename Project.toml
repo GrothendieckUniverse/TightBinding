@@ -1,6 +1,6 @@
 name = "TightBinding"
 uuid = "20fe1238-1445-43d3-9455-5ed0db04161c"
-version = "0.1.0"
+version = "0.3.0"
 authors = ["xiaodong-hu <hxd.phys@gmail.com>"]
 
 [deps]

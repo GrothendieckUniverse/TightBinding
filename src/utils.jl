@@ -195,3 +195,189 @@ function Chern_number_Fukui_Hatsugai_Suzuki(Hk_crys::Function; band::Int, nk::In
 
     return total_flux / (2π)
 end
+
+
+
+"""
+Build Real-Space Hamiltonian Matrix with Twisted Boundary Conditions
+---
+Construct the `n_site × n_site` real-space Hamiltonian matrix for a tight-binding model
+with twisted boundary conditions specified by `twisted_phase_over_2π`.
+
+A hopping that crosses the periodic boundary in direction `d` with winding number `w_d`
+acquires an extra phase factor `exp(i·2π·twisted_phase_over_2π[d]·w_d)`.
+
+- Args:
+    - `tb_model::Real_Space_TightBinding_Model`: the tight-binding model
+    - `twisted_phase_over_2π::Vector{Float64}`: twisted phases φ/(2π) along each direction
+- Returns:
+    - `::Matrix{ComplexF64}` the `n_site × n_site` real-space Hamiltonian matrix
+"""
+function build_Hamiltonian_matrix(
+    tb_model::Real_Space_TightBinding_Model,
+    twisted_phase_over_2π::Vector{Float64},
+)::Matrix{ComplexF64}
+    l = tb_model.lattice
+    n_site = l.n_site
+    dim = l.dim
+    L = l.sample_size
+    pbc = l.pbc_indicator
+
+    H = zeros(ComplexF64, n_site, n_site)
+
+    # Determine which hopping map to use.
+    # `input_hopping_map` contains hopping templates (single copy per orbital pair).
+    # `full_hopping_map` contains all translated copies (already wrapped).
+    use_input = !isempty(tb_model.input_hopping_map)
+
+    if use_input
+        # --- Build from input_hopping_map (template hoppings) ---
+        for ((site_from, site_to), amp) in tb_model.input_hopping_map
+            (cell_from, sub_from) = site_from
+            (cell_to, sub_to) = site_to
+
+            Δ_cell_template = cell_to - cell_from
+
+            for cell in l.cell_int_list
+                cell_to_new = cell + Δ_cell_template
+
+                # Compute winding numbers and wrap cell_to_new
+                winding = zeros(Int, dim)
+                skip = false
+                for d in 1:dim
+                    if pbc[d]
+                        winding[d] = fld(cell_to_new[d], L[d])
+                        cell_to_new[d] = mod(cell_to_new[d], L[d])
+                    else
+                        if cell_to_new[d] < 0 || cell_to_new[d] >= L[d]
+                            skip = true
+                            break
+                        end
+                    end
+                end
+                skip && continue
+
+                # Phase factor from twisted boundary conditions
+                phase = cis(2π * dot(twisted_phase_over_2π, winding))
+
+                i_site = l.site_to_index_map[(cell, sub_from)]
+                j_site = l.site_to_index_map[(cell_to_new, sub_to)]
+
+                H[i_site, j_site] += amp * phase
+            end
+        end
+    else
+        # --- Build from full_hopping_map (already translated & wrapped) ---
+        # Reconstruct templates: collect all hoppings that start from cell [0,0,...]
+        template_map = Dict{Tuple{Int,Int,Vector{Int}},ComplexF64}()
+        for ((site_from, site_to), amp) in tb_model.full_hopping_map
+            (cell_from, sub_from) = site_from
+            (cell_to, sub_to) = site_to
+            if all(cell_from .== 0)
+                Δ = collect(cell_to)
+                key = (sub_from, sub_to, Δ)
+                template_map[key] = get(template_map, key, zero(ComplexF64)) + amp
+            end
+        end
+
+        for ((sub_from, sub_to, Δ_cell_template), amp) in template_map
+            for cell in l.cell_int_list
+                cell_to_new = cell + Δ_cell_template
+
+                winding = zeros(Int, dim)
+                for d in 1:dim
+                    if pbc[d]
+                        winding[d] = fld(cell_to_new[d], L[d])
+                        cell_to_new[d] = mod(cell_to_new[d], L[d])
+                    end
+                end
+
+                phase = cis(2π * dot(twisted_phase_over_2π, winding))
+
+                i_site = l.site_to_index_map[(cell, sub_from)]
+                j_site = l.site_to_index_map[(cell_to_new, sub_to)]
+
+                H[i_site, j_site] += amp * phase
+            end
+        end
+    end
+
+    return H
+end
+
+
+
+"""
+Compute Many-Body Chern Number using Fukui–Hatsugai–Suzuki Method on the Flux Torus
+---
+For a non-interacting tight-binding model, we compute the **many-body Chern number**
+by discretising the flux-torus (θ₁, θ₂) ∈ [0,1]² and applying the Fukui–Hatsugai–Suzuki
+method to the many-body ground-state Slater determinant.
+
+The many-body Chern number of a non-interacting system equals the sum of the
+single-particle Chern numbers of all occupied bands.
+
+- Args:
+    - `tb_model::Real_Space_TightBinding_Model`: the tight-binding model (must have PBC in ALL directions)
+    - `n_occ::Int`: number of occupied single-particle states (filling)
+    - `nθ::Int=21`: number of θ-points per direction on the flux grid
+- Returns:
+    - `::Float64` the many-body Chern number
+"""
+function many_body_Chern_number_Fukui_Hatsugai_Suzuki(
+    tb_model::Real_Space_TightBinding_Model;
+    n_occ::Int,
+    nθ::Int=21,
+)::Float64
+    l = tb_model.lattice
+    @assert all(l.pbc_indicator) "All directions must be periodic (torus) for many-body Chern number."
+
+    n_site = l.n_site
+    @assert 1 ≤ n_occ ≤ n_site "n_occ=$n_occ must be between 1 and n_site=$n_site."
+
+    # Pre-allocate storage for occupied eigenvectors at each θ-point
+    occ_vecs = Array{Matrix{ComplexF64}}(undef, nθ, nθ)  # each entry is (n_site × n_occ)
+
+    for i in 0:(nθ-1)
+        θ₁ = i / nθ
+        for j in 0:(nθ-1)
+            θ₂ = j / nθ
+            θ = [θ₁, θ₂]  # crystal-coordinate flux phases
+
+            H = build_Hamiltonian_matrix(tb_model, θ)
+            F = eigen(Hermitian(H))
+            # Store the n_occ lowest eigenvectors
+            occ_vecs[i+1, j+1] = F.vectors[:, 1:n_occ]
+        end
+    end
+
+    # Link variable: overlap of two Slater determinants
+    function slater_link(V1::Matrix{ComplexF64}, V2::Matrix{ComplexF64})::ComplexF64
+        # V1, V2 are (n_site × n_occ) matrices whose columns are the occupied single-particle states
+        # Overlap matrix S_{ab} = ⟨ψ_a^(1)|ψ_b^(2)⟩ = (V1[:,a]† · V2[:,b])
+        S = V1' * V2  # (n_occ × n_occ) overlap matrix
+        z = det(S)
+        return z / abs(z)
+    end
+
+    total_flux = 0.0
+
+    for i in 1:nθ, j in 1:nθ
+        ip = mod1(i + 1, nθ)
+        jp = mod1(j + 1, nθ)
+
+        V = occ_vecs[i, j]
+        Vx = occ_vecs[ip, j]
+        Vy = occ_vecs[i, jp]
+        Vxy = occ_vecs[ip, jp]
+
+        Ux = slater_link(V, Vx)
+        Uy = slater_link(V, Vy)
+        Ux_y = slater_link(Vy, Vxy)
+        Uy_x = slater_link(Vx, Vxy)
+
+        total_flux += angle(Ux * Uy_x / (Ux_y * Uy))
+    end
+
+    return total_flux / (2π)
+end

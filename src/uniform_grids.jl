@@ -84,12 +84,12 @@ from `r_data::Real_Space_Lattice` satisfying PBC in ALL directions.
 - Args:
     - `r_data::Real_Space_Lattice`: the underlying real-space lattice (with PBC in ALL directions)
 - Named Args:
-    - `twisted_phases_over_2π::Vector{U}`: twisted phases (over 2π). This will shift the `site_crys_list` as well as `site_cart_list`
+    - `twisted_phases_over_2π::Vector{Float64}`: twisted phases (over 2π). This will shift the `site_crys_list` as well as `site_cart_list`. Defaults to `r_data.twisted_phase_over_2π`.
 """
 function initialize_uniform_grids(
     r_data::Real_Space_Lattice;
-    twisted_phases_over_2π::Vector{U}
-)::Uniform_Grids where U
+    twisted_phases_over_2π::Vector{Float64}=r_data.twisted_phase_over_2π
+)::Uniform_Grids
     dim = r_data.dim
     sample_size = r_data.sample_size
 
@@ -106,7 +106,7 @@ function initialize_uniform_grids(
     site_crys_list = [((site_int + twisted_phases_over_2π) ./ sample_size) for site_int in site_int_list]
     site_cart_list = [sum(site_crys .* basis_vec_list) for site_crys in site_crys_list]
 
-    return Uniform_Grids{typeof(r_data.cell_volume),U}(
+    return Uniform_Grids{typeof(r_data.cell_volume),Float64}(
         r_data.lattice_name,
         dim,
         sample_size,

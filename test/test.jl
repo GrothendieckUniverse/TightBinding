@@ -163,13 +163,30 @@ function test(model::Haldane_Honeycomb)
     )
     display(fig_bands)
 
-    # sanity check
-    println("C_lower = ", Chern_number_Fukui_Hatsugai_Suzuki(Hk_crys; band=1, nk=51))
-    println("C_upper = ", Chern_number_Fukui_Hatsugai_Suzuki(Hk_crys; band=2, nk=51))
+    # sanity check — single-particle Chern numbers
+    C_sp_lower = Chern_number_Fukui_Hatsugai_Suzuki(Hk_crys; band=1, nk=51)
+    C_sp_upper = Chern_number_Fukui_Hatsugai_Suzuki(Hk_crys; band=2, nk=51)
+    println("C_lower (sp) = ", round(C_sp_lower, digits=6))
+    println("C_upper (sp) = ", round(C_sp_upper, digits=6))
+
+    # --- 7. Many-body Chern numbers in flux space -----------------------------
+    n_occ = lat.n_cell  # half-filling: fill the lowest L² states
+
+    # 7a. Half-filling: C_mb should match the occupied band's single-particle C
+    C_mb_half = many_body_Chern_number_Fukui_Hatsugai_Suzuki(tb; n_occ=n_occ, nθ=21)
+    println("C_mb (half-filling)  = ", round(C_mb_half, digits=6))
+    @test round(C_mb_half, digits=2) ≈ round(C_sp_lower, digits=2) atol = 0.1
+
+    # 7b. Full filling: all bands occupied → total Chern number must be zero
+    C_mb_full = many_body_Chern_number_Fukui_Hatsugai_Suzuki(tb; n_occ=2 * n_occ, nθ=21)
+    println("C_mb (full filling)  = ", round(C_mb_full, digits=6))
+    @test round(C_mb_full, digits=2) ≈ 0.0 atol = 0.1
+
+    println("✓ All many-body Chern number checks passed.\n")
 end
 
 
-function test(test_set::CheckerBoard)
+function test(model::CheckerBoard)
     # --- 1. Build real-space lattice -----------------------------------
     lat = initialize_real_space_lattice(;
         lattice_name="checkerboard",
@@ -237,12 +254,30 @@ function test(test_set::CheckerBoard)
     )
     display(fig_bands)
 
-    # sanity check
-    println("C_lower = ", Chern_number_Fukui_Hatsugai_Suzuki(Hk_crys; band=1, nk=51))
-    println("C_upper = ", Chern_number_Fukui_Hatsugai_Suzuki(Hk_crys; band=2, nk=51))
+    # sanity check — single-particle Chern numbers
+    C_sp_lower = Chern_number_Fukui_Hatsugai_Suzuki(Hk_crys; band=1, nk=51)
+    C_sp_upper = Chern_number_Fukui_Hatsugai_Suzuki(Hk_crys; band=2, nk=51)
+    println("C_lower (sp) = ", round(C_sp_lower, digits=6))
+    println("C_upper (sp) = ", round(C_sp_upper, digits=6))
+
+    # --- 7. Many-body Chern numbers in flux space -----------------------------
+    n_occ = lat.n_cell  # half-filling: fill the lowest L² states
+
+    # 7a. Half-filling: C_mb should match the occupied band's single-particle C
+    C_mb_half = many_body_Chern_number_Fukui_Hatsugai_Suzuki(tb; n_occ=n_occ, nθ=21)
+    println("C_mb (half-filling)  = ", round(C_mb_half, digits=6))
+    @test round(C_mb_half, digits=2) ≈ round(C_sp_lower, digits=2) atol = 0.1
+
+    # 7b. Full filling: all bands occupied → total Chern number must be zero
+    C_mb_full = many_body_Chern_number_Fukui_Hatsugai_Suzuki(tb; n_occ=2 * n_occ, nθ=21)
+    println("C_mb (full filling)  = ", round(C_mb_full, digits=6))
+    @test round(C_mb_full, digits=2) ≈ 0.0 atol = 0.1
+
+    println("✓ All many-body Chern number checks passed.\n")
 end
 
 
+test(Haldane_Honeycomb())
 test(CheckerBoard())
 
 

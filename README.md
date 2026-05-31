@@ -80,19 +80,62 @@ Real_Space_Lattice ──▶ Real_Space_TightBinding_Model
 
 ## Key Concepts
 
-### Twisted Phases (Flux Insertion)
+### Twisted Phases & Laughlin's Charge Pump
 
-The field `twisted_phase_over_2π` in `Real_Space_Lattice` encodes magnetic fluxes
-threaded through the periodic directions of the torus:
+The field `twisted_phase_over_2π` in `Real_Space_Lattice` encodes Aharonov–Bohm
+fluxes threaded through the periodic directions of the system.  Non-zero values
+are **only allowed where `pbc_indicator[d] == true`** — this is enforced at
+construction time.
 
-- **Cylinder geometry** (`pbc_indicator = [true, false]`): only `twisted_phase_over_2π[1]`
-  may be non-zero. The second component must be zero.
-- **Torus geometry** (`pbc_indicator = [true, true]`): both components may be non-zero.
-- **Open boundaries** (`pbc_indicator = [false, false]`): both must be zero.
+#### Physical Picture
 
-Inserting a flux φ is equivalent to shifting the crystal momentum grid by φ/L.
-This is automatically handled when constructing `Uniform_Grids` from a lattice
-with non-zero twisted phases.
+Consider a **cylinder**: $x \sim x + L_x$ (periodic), $y$ open.  Threading a flux
+$\Phi_x = \theta_x$ through the cylinder hole modifies the boundary condition to
+
+$$\psi(x+L_x, y) = e^{i\theta_x}\, \psi(x, y).$$
+
+Equivalently we have introduced a vector potential $A_x = \theta_x / L_x$.
+Adiabatically varying $\theta_x$ by $2\pi$ induces an electric field
+$E_x = -\partial_t A_x = -\dot{\theta}_x / L_x$.  Through the Hall conductivity,
+a transverse current $j_y = \sigma_{xy} E_x$ flows, and a **fractional charge**
+
+$$\Delta Q_y = \sigma_{xy}\, \Delta\Phi_x = \sigma_{xy}\, (2\pi)$$
+
+is pumped along the open $y$-direction.  In units where $e = \hbar = 1$,
+$\sigma_{xy} = C$ (the Chern number), so the pumped charge per $2\pi$ flux
+quantum equals the Chern number of the occupied band(s).
+
+#### How the Code Implements It
+
+| Geometry | `pbc_indicator` | Allowed `twisted_phase_over_2π` | Use case |
+|---|---|---|---|
+| **Cylinder** | `[true, false]` | `[θ_x, 0.0]` | Laughlin charge pump, edge states |
+| **Torus** | `[true, true]` | `[θ_x, θ_y]` | Many-body Chern number on flux torus |
+| **Open** | `[false, false]` | `[0.0, 0.0]` | Finite cluster, no flux |
+
+When a hopping crosses the periodic boundary in direction $d$ with winding
+number $w_d$ ($w_d = \pm1, \pm2, \dots$), it acquires the phase
+
+$$t_{ij} \mapsto t_{ij}\, \exp\!\big(i\, 2\pi\; \theta_d\, w_d\big).$$
+
+This is handled automatically by `build_Hamiltonian_matrix(tb, θ)`.  For open
+directions, hoppings that would leave the sample are simply omitted.
+
+#### Flux = Momentum Shift
+
+A flux twist $\theta_d$ shifts the crystal-momentum grid by $\theta_d / L_d$.
+When constructing `Uniform_Grids` from a `Real_Space_Lattice`:
+
+$$\mathbf{k}_{\text{crys}}(\mathbf{n}) = \frac{\mathbf{n} + \boldsymbol{\theta}}{L}, \qquad n_d = 0,1,\dots,L_d-1$$
+
+This shift is applied in `initialize_uniform_grids(r_data; twisted_phases_over_2π=…)`
+and defaults to the lattice's stored `twisted_phase_over_2π`.
+
+#### Validation Rules (enforced at construction)
+
+- $\text{pbc}[d] = \text{false}$ ⇒ $\theta_d$ must be zero (error otherwise)
+- $\text{pbc}[d] = \text{true}$ ⇒ $\theta_d$ may be any real value
+- The `many_body_Chern_number_FHS` function requires a full torus (`all(pbc) == true`)
 
 ### Many-Body Chern Number
 
@@ -166,10 +209,33 @@ C_mb_full = many_body_Chern_number_Fukui_Hatsugai_Suzuki(tb; n_occ=2*n_b, nθ=21
 println("C_mb (full filling) = $C_mb_full")   # 0.0
 ```
 
-### 2. Flux Insertion & Shifted Momentum Grid
+### 2. Laughlin Charge Pump (Cylinder Geometry)
+
+Thread a flux through a cylinder and observe the spectral flow:
 
 ```julia
-# Lattice with flux φ₁ = 0.8·2π threaded through direction 1
+# Cylinder: x periodic, y open
+lat_cyl = initialize_real_space_lattice(;
+    brav_vec_list = [[1.0, 0.0], [0.0, 1.0]],
+    sample_size   = [6, 6],
+    pbc_indicator = [true, false],
+    twisted_phase_over_2π = [0.0, 0.0],  # θ_y must be zero (open direction)
+)
+
+tb = initialize_real_space_tightbinding_model(lat_cyl; model_name = "Haldane")
+# ... add hoppings ...
+
+# Build H(θ) with twisted boundary at θ_x = 0.5 (half flux quantum)
+H_theta = build_Hamiltonian_matrix(tb, [0.5, 0.0])
+
+# Sweep θ_x ∈ [0, 1] to observe spectral flow and edge-state pumping.
+# The number of states crossing the gap equals the Chern number × N_cells_y.
+```
+
+### 3. Flux-Shifted Momentum Grid (Torus Geometry)
+
+```julia
+# Torus with flux φ₁ = 0.8·2π threaded through direction 1
 lat_flux = initialize_real_space_lattice(;
     lattice_name = "honeycomb",
     sample_size   = [3, 3],
@@ -182,7 +248,7 @@ k_grid = initialize_uniform_grids(lat_flux)
 # k_grid.site_crys_list[1] ≈ [0.8/3, 0.0]  (shifted by φ/L)
 ```
 
-### 3. Graph-Based Hopping Generation
+### 4. Graph-Based Hopping Generation
 
 ```julia
 lat = initialize_real_space_lattice(;
@@ -209,7 +275,7 @@ add_hoppings_by_graph_distance!(tb, 2, (i, j) ->
     ); is_hermitian=true)
 ```
 
-### 4. Band Structure Plotting
+### 5. Band Structure Plotting
 
 ```julia
 k_data = initialize_uniform_grids(lat)

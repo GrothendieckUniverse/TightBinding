@@ -285,12 +285,20 @@ function build_Hamiltonian_matrix(
                 cell_to_new = cell + Δ_cell_template
 
                 winding = zeros(Int, dim)
+                skip = false
                 for d in 1:dim
                     if pbc[d]
                         winding[d] = fld(cell_to_new[d], L[d])
                         cell_to_new[d] = mod(cell_to_new[d], L[d])
+                    else
+                        # Open boundary: drop hoppings that leave the sample
+                        if cell_to_new[d] < 0 || cell_to_new[d] >= L[d]
+                            skip = true
+                            break
+                        end
                     end
                 end
+                skip && continue
 
                 phase = cis(2π * dot(twisted_phase_over_2π, winding))
 

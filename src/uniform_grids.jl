@@ -84,12 +84,16 @@ from `r_data::Real_Space_Lattice` satisfying PBC in ALL directions.
 - Args:
     - `r_data::Real_Space_Lattice`: the underlying real-space lattice (with PBC in ALL directions)
 - Named Args:
-    - `twisted_phases_over_2π::Vector{Float64}`: twisted phases (over 2π). This will shift the `site_crys_list` as well as `site_cart_list`. Defaults to `r_data.twisted_phase_over_2π`.
+    - `twisted_phases_over_2π::Vector{Float64}`: twisted phases (over 2π). This will shift the `site_crys_list` as well as `site_cart_list`. Defaults to `r_data.twisted_phases_over_2π`.
 """
 function initialize_uniform_grids(
     r_data::Real_Space_Lattice;
-    twisted_phases_over_2π::Vector{Float64}=r_data.twisted_phase_over_2π
+    twisted_phases_over_2π::Vector{Float64}=r_data.twisted_phases_over_2π
 )::Uniform_Grids
+    if norm(twisted_phases_over_2π - r_data.twisted_phases_over_2π) > 1.0E-10
+        @warn "Input `twisted_phases_over_2π`=$(twisted_phases_over_2π) differs from the lattice's stored value `r_data.twisted_phases_over_2π=$(r_data.twisted_phases_over_2π)`. This may lead to unexpected behavior!"
+    end
+
     dim = r_data.dim
     sample_size = r_data.sample_size
 

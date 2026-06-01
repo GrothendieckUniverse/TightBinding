@@ -60,7 +60,7 @@ building uniform momentum-space grids, computing band structures and (many-body)
 ```
 Real_Space_Lattice ──▶ Real_Space_TightBinding_Model
         │                        │
-        │   twisted_phase_over_2π│  input_hopping_map
+        │   twisted_phases_over_2π│  input_hopping_map
         ▼                        ▼
   Uniform_Grids             build_Hk_crys() ──▶ H(k) Bloch Hamiltonian
    (k-space grid)                  │
@@ -82,7 +82,7 @@ Real_Space_Lattice ──▶ Real_Space_TightBinding_Model
 
 ### Twisted Phases & Laughlin's Charge Pump
 
-The field `twisted_phase_over_2π` in `Real_Space_Lattice` encodes Aharonov–Bohm
+The field `twisted_phases_over_2π` in `Real_Space_Lattice` encodes Aharonov–Bohm
 fluxes threaded through the periodic directions of the system.  Non-zero values
 are **only allowed where `pbc_indicator[d] == true`** — this is enforced at
 construction time.
@@ -107,7 +107,7 @@ quantum equals the Chern number of the occupied band(s).
 
 #### How the Code Implements It
 
-| Geometry | `pbc_indicator` | Allowed `twisted_phase_over_2π` | Use case |
+| Geometry | `pbc_indicator` | Allowed `twisted_phases_over_2π` | Use case |
 |---|---|---|---|
 | **Cylinder** | `[true, false]` | `[θ_x, 0.0]` | Laughlin charge pump, edge states |
 | **Torus** | `[true, true]` | `[θ_x, θ_y]` | Many-body Chern number on flux torus |
@@ -129,7 +129,7 @@ When constructing `Uniform_Grids` from a `Real_Space_Lattice`:
 $$\mathbf{k}_{\text{crys}}(\mathbf{n}) = \frac{\mathbf{n} + \boldsymbol{\theta}}{L}, \qquad n_d = 0,1,\dots,L_d-1$$
 
 This shift is applied in `initialize_uniform_grids(r_data; twisted_phases_over_2π=…)`
-and defaults to the lattice's stored `twisted_phase_over_2π`.
+and defaults to the lattice's stored `twisted_phases_over_2π`.
 
 #### Validation Rules (enforced at construction)
 
@@ -219,7 +219,7 @@ lat_cyl = initialize_real_space_lattice(;
     brav_vec_list = [[1.0, 0.0], [0.0, 1.0]],
     sample_size   = [6, 6],
     pbc_indicator = [true, false],
-    twisted_phase_over_2π = [0.0, 0.0],  # θ_y must be zero (open direction)
+    twisted_phases_over_2π = [0.0, 0.0],  # θ_y must be zero (open direction)
 )
 
 tb = initialize_real_space_tightbinding_model(lat_cyl; model_name = "Haldane")
@@ -240,7 +240,7 @@ lat_flux = initialize_real_space_lattice(;
     lattice_name = "honeycomb",
     sample_size   = [3, 3],
     pbc_indicator = [true, true],
-    twisted_phase_over_2π = [0.8, 0.0],
+    twisted_phases_over_2π = [0.8, 0.0],
 )
 
 # The momentum grid is automatically shifted
@@ -338,7 +338,7 @@ The tests verify:
 
 ## Version History
 
-- **0.3.0** — Added `twisted_phase_over_2π`, flux-shifted `Uniform_Grids`,
+- **0.3.0** — Added `twisted_phases_over_2π`, flux-shifted `Uniform_Grids`,
   `build_Hamiltonian_matrix`, `many_body_Chern_number_Fukui_Hatsugai_Suzuki`,
   and many-body Chern number tests.
 - **0.2.0** — Graph-based hopping generation, `allowed_bonds` filtering,

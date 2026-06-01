@@ -201,27 +201,28 @@ end
 """
 Build Real-Space Hamiltonian Matrix with Twisted Boundary Conditions
 ---
-Construct the `n_site × n_site` real-space Hamiltonian matrix for a tight-binding model
-with twisted boundary conditions specified by `twisted_phase_over_2π`.
+Construct the `n_site × n_site` real-space Hamiltonian matrix for a tight-binding model, with twisted boundary conditions specified by `twisted_phases_over_2π` (fallback to the stored value in `lattice.twisted_phases_over_2π` if not provided)
 
-A hopping that crosses the periodic boundary in direction `d` with winding number `w_d`
-acquires an extra phase factor `exp(i·2π·twisted_phase_over_2π[d]·w_d)`.
+A hopping that crosses the periodic boundary in direction `d` with winding number `w_d` acquires an extra phase factor `exp(i·2π·twisted_phases_over_2π[d]·w_d)`.
 
 - Args:
     - `tb_model::Real_Space_TightBinding_Model`: the tight-binding model
-    - `twisted_phase_over_2π::Vector{Float64}`: twisted phases φ/(2π) along each direction
+    - `twisted_phases_over_2π::Vector{Float64}`: twisted phases φ/(2π) along each direction
 - Returns:
     - `::Matrix{ComplexF64}` the `n_site × n_site` real-space Hamiltonian matrix
 """
-function build_Hamiltonian_matrix(
-    tb_model::Real_Space_TightBinding_Model,
-    twisted_phase_over_2π::Vector{Float64},
+function build_Hamiltonian_matrix(tb_model::Real_Space_TightBinding_Model;
+    twisted_phases_over_2π::Union{Nothing,Vector{Float64}}=nothing
 )::Matrix{ComplexF64}
     l = tb_model.lattice
     n_site = l.n_site
     dim = l.dim
     L = l.sample_size
     pbc = l.pbc_indicator
+
+    if isnothing(twisted_phases_over_2π)
+        twisted_phases_over_2π = tb_model.lattice.twisted_phases_over_2π
+    end
 
     H = zeros(ComplexF64, n_site, n_site)
 
@@ -258,7 +259,7 @@ function build_Hamiltonian_matrix(
                 skip && continue
 
                 # Phase factor from twisted boundary conditions
-                phase = cis(2π * dot(twisted_phase_over_2π, winding))
+                phase = cis(2π * dot(twisted_phases_over_2π, winding))
 
                 i_site = l.site_to_index_map[(cell, sub_from)]
                 j_site = l.site_to_index_map[(cell_to_new, sub_to)]
@@ -300,7 +301,7 @@ function build_Hamiltonian_matrix(
                 end
                 skip && continue
 
-                phase = cis(2π * dot(twisted_phase_over_2π, winding))
+                phase = cis(2π * dot(twisted_phases_over_2π, winding))
 
                 i_site = l.site_to_index_map[(cell, sub_from)]
                 j_site = l.site_to_index_map[(cell_to_new, sub_to)]
@@ -350,9 +351,9 @@ function many_body_Chern_number_Fukui_Hatsugai_Suzuki(
         θ₁ = i / nθ
         for j in 0:(nθ-1)
             θ₂ = j / nθ
-            θ = [θ₁, θ₂]  # crystal-coordinate flux phases
+            θ_vec = [θ₁, θ₂]  # crystal-coordinate flux phases
 
-            H = build_Hamiltonian_matrix(tb_model, θ)
+            H = build_Hamiltonian_matrix(tb_model; twisted_phases_over_2π=θ_vec)
             F = eigen(Hermitian(H))
             # Store the n_occ lowest eigenvectors
             occ_vecs[i+1, j+1] = F.vectors[:, 1:n_occ]

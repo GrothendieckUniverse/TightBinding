@@ -39,7 +39,9 @@ building uniform momentum-space grids, computing band structures and (many-body)
 │                   │                            │                     │
 │                   │  • dual_basis_vec_mat/list │                     │
 │                   │  • build_Hk_crys (H(k))    │                     │
-│                   │  • build_real_space_tb_Hamiltonain                     │
+│                   │  • generate_bilinear_terms │                     │
+│                   │  • build_real_space_tb_    │                     │
+│                   │      Hamiltonain (sparse)  │                     │
 │                   │  • Chern_number_FHS        │                     │
 │                   │  • many_body_Chern_number  │                     │
 │                   └────────────┬──────────────┘                     │
@@ -305,7 +307,8 @@ plot_bands(Hk_crys, k_data;
 | `plot_real_space_tightbinding_model` | Visualise hoppings on the lattice |
 | `initialize_uniform_grids` | Build uniform grids (momentum or flux space) |
 | `build_Hk_crys` | Construct H(k) Bloch Hamiltonian |
-| `build_real_space_tb_Hamiltonain`; twisted_phases_over_2π= Build real-space H matrix with twisted BCs |
+| `generate_bilinear_terms` | Extract (i, j, tᵢⱼ) bilinear terms with twisted BCs |
+| `build_real_space_tb_Hamiltonain` | Build sparse real-space H matrix with twisted BCs |
 | `Chern_number_Fukui_Hatsugai_Suzuki` | Single-particle Chern number (FHS method) |
 | `many_body_Chern_number_Fukui_Hatsugai_Suzuki` | Many-body Chern number on flux torus |
 | `dual_basis_vec_mat` / `dual_basis_vec_list` | Compute dual (reciprocal) basis vectors |

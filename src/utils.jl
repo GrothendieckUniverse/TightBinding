@@ -199,36 +199,66 @@ end
 
 
 """
-Build Real-Space TightBinding Hamiltonian Matrix with Twisted Boundary Conditions
+In-Place Compute Winding Numbers and Wrap Cell Indices
 ---
-Construct the `n_site × n_site` real-space Hamiltonian matrix for a tight-binding model, with twisted boundary conditions specified by `twisted_phases_over_2π` (fallback to the stored value in `lattice.twisted_phases_over_2π` if not provided)
+For a proposed cell index `cell_to_new`, compute winding numbers across periodic boundaries and wrap in-place.
+Returns `nothing` if the cell lies outside the sample in any open (non-periodic) direction.
 
-A hopping that crosses the periodic boundary in direction `d` with winding number `w_d` acquires an extra phase factor `exp(i·2π·twisted_phases_over_2π[d]·w_d)`.
+- Args:
+    - `cell_to_new::Vector{Int}`: proposed destination cell (modified in-place)
+    - `L::Vector{Int}`: sample size in each direction
+    - `pbc::Vector{Bool}`: periodic boundary condition indicators
+    - `dim::Int`: dimension of the lattice
+- Returns:
+    - `::Union{Nothing,Vector{Int}}` — winding numbers, or `nothing` to skip
+"""
+@inline function _compute_winding!(cell_to_new::Vector{Int}, L::Vector{Int}, pbc::Vector{Bool}, dim::Int)
+    winding = zeros(Int, dim)
+    for d in 1:dim
+        if pbc[d]
+            winding[d] = fld(cell_to_new[d], L[d])
+            cell_to_new[d] = mod(cell_to_new[d], L[d])
+        else
+            # Open boundary: drop hoppings that leave the sample
+            if cell_to_new[d] < 0 || cell_to_new[d] >= L[d]
+                return nothing
+            end
+        end
+    end
+    return winding
+end
+
+
+
+"""
+Generate Bilinear Terms `t_{ij} c_i† c_j` as Tuple `(i,j,amplitude)` from a Tight-Binding Model
+---
+Extracts all bilinear operator terms `t_{ij} c_i† c_j` from either `input_hopping_map` (template hoppings) or `full_hopping_map` (graph-generated hoppings), _by applying the specified twisted boundary phases_.
+
+A hopping that crosses the periodic boundary in direction `d` with winding number `w_d` acquires an extra factor `exp(i·2π·twisted_phases_over_2π[d]·w_d)`.
 
 - Args:
     - `tb_model::Real_Space_TightBinding_Model`: the tight-binding model
-    - `twisted_phases_over_2π::Vector{Float64}`: twisted phases φ/(2π) along each direction
+- Named Args:
+    - `twisted_phases_over_2π::Union{Nothing,Vector{Float64}}`: twisted phases φ/(2π). Falls back to `tb_model.lattice.twisted_phases_over_2π` when `nothing`.
 - Returns:
-    - `::Matrix{ComplexF64}` the `n_site × n_site` real-space Hamiltonian matrix
+    - `::Vector{Tuple{Int,Int,ComplexF64}}` list of `(i_site, j_site, amplitude)` terms.
 """
-function build_real_space_tb_Hamiltonain(tb_model::Real_Space_TightBinding_Model;
+function generate_bilinear_terms(tb_model::Real_Space_TightBinding_Model;
     twisted_phases_over_2π::Union{Nothing,Vector{Float64}}=nothing
-)::Matrix{ComplexF64}
-    l = tb_model.lattice
-    n_site = l.n_site
-    dim = l.dim
-    L = l.sample_size
-    pbc = l.pbc_indicator
+)::Vector{Tuple{Int,Int,ComplexF64}}
+    lattice = tb_model.lattice
+    dim = lattice.dim
+    L = lattice.sample_size
+    pbc = lattice.pbc_indicator
 
     if isnothing(twisted_phases_over_2π)
-        twisted_phases_over_2π = tb_model.lattice.twisted_phases_over_2π
+        twisted_phases_over_2π = lattice.twisted_phases_over_2π
     end
 
-    H = zeros(ComplexF64, n_site, n_site)
+    terms = Vector{Tuple{Int,Int,ComplexF64}}()
 
     # Determine which hopping map to use.
-    # `input_hopping_map` contains hopping templates (single copy per orbital pair).
-    # `full_hopping_map` contains all translated copies (already wrapped).
     use_input = !isempty(tb_model.input_hopping_map)
 
     if use_input
@@ -239,32 +269,18 @@ function build_real_space_tb_Hamiltonain(tb_model::Real_Space_TightBinding_Model
 
             Δ_cell_template = cell_to - cell_from
 
-            for cell in l.cell_int_list
+            for cell in lattice.cell_int_list
                 cell_to_new = cell + Δ_cell_template
 
-                # Compute winding numbers and wrap cell_to_new
-                winding = zeros(Int, dim)
-                skip = false
-                for d in 1:dim
-                    if pbc[d]
-                        winding[d] = fld(cell_to_new[d], L[d])
-                        cell_to_new[d] = mod(cell_to_new[d], L[d])
-                    else
-                        if cell_to_new[d] < 0 || cell_to_new[d] >= L[d]
-                            skip = true
-                            break
-                        end
-                    end
-                end
-                skip && continue
+                winding = _compute_winding!(cell_to_new, L, pbc, dim)
+                isnothing(winding) && continue
 
-                # Phase factor from twisted boundary conditions
                 phase = cis(2π * dot(twisted_phases_over_2π, winding))
 
-                i_site = l.site_to_index_map[(cell, sub_from)]
-                j_site = l.site_to_index_map[(cell_to_new, sub_to)]
+                i_site = lattice.site_to_index_map[(cell, sub_from)]
+                j_site = lattice.site_to_index_map[(cell_to_new, sub_to)]
 
-                H[i_site, j_site] += amp * phase
+                push!(terms, (i_site, j_site, amp * phase))
             end
         end
     else
@@ -282,36 +298,64 @@ function build_real_space_tb_Hamiltonain(tb_model::Real_Space_TightBinding_Model
         end
 
         for ((sub_from, sub_to, Δ_cell_template), amp) in template_map
-            for cell in l.cell_int_list
+            for cell in lattice.cell_int_list
                 cell_to_new = cell + Δ_cell_template
 
-                winding = zeros(Int, dim)
-                skip = false
-                for d in 1:dim
-                    if pbc[d]
-                        winding[d] = fld(cell_to_new[d], L[d])
-                        cell_to_new[d] = mod(cell_to_new[d], L[d])
-                    else
-                        # Open boundary: drop hoppings that leave the sample
-                        if cell_to_new[d] < 0 || cell_to_new[d] >= L[d]
-                            skip = true
-                            break
-                        end
-                    end
-                end
-                skip && continue
+                winding = _compute_winding!(cell_to_new, L, pbc, dim)
+                isnothing(winding) && continue
 
                 phase = cis(2π * dot(twisted_phases_over_2π, winding))
 
-                i_site = l.site_to_index_map[(cell, sub_from)]
-                j_site = l.site_to_index_map[(cell_to_new, sub_to)]
+                i_site = lattice.site_to_index_map[(cell, sub_from)]
+                j_site = lattice.site_to_index_map[(cell_to_new, sub_to)]
 
-                H[i_site, j_site] += amp * phase
+                push!(terms, (i_site, j_site, amp * phase))
             end
         end
     end
 
-    return H
+    return terms
+end
+
+
+
+"""
+Build Real-Space Tight-Binding Hamiltonian Matrix (Sparse) with Twisted Boundary Conditions
+---
+Construct the `n_site × n_site` real-space Hamiltonian as a **sparse** `SparseMatrixCSC`, using `generate_bilinear_terms` to extract all `(i_to, j_from, t_{ij})` triples.
+
+A hopping that crosses the periodic boundary in direction `d` with winding number `w_d` acquires an extra phase factor `exp(i·2π·twisted_phases_over_2π[d]·w_d)`.
+
+- Args:
+    - `tb_model::Real_Space_TightBinding_Model`: the tight-binding model
+- Named Args:
+    - `twisted_phases_over_2π::Union{Nothing,Vector{Float64}}`: twisted phases φ/(2π).
+      Falls back to `tb_model.lattice.twisted_phases_over_2π` when `nothing`.
+- Returns:
+    - `::SparseMatrixCSC{ComplexF64,Int}` the `n_site × n_site` sparse Hamiltonian matrix
+"""
+function build_real_space_tb_Hamiltonain(tb_model::Real_Space_TightBinding_Model;
+    twisted_phases_over_2π::Union{Nothing,Vector{Float64}}=nothing
+)::SparseMatrixCSC{ComplexF64,Int}
+    n_site = tb_model.lattice.n_site
+
+    bilinear_terms = generate_bilinear_terms(tb_model;
+        twisted_phases_over_2π=twisted_phases_over_2π
+    )
+
+    n_terms = length(bilinear_terms)
+    rows = Vector{Int}(undef, n_terms)
+    cols = Vector{Int}(undef, n_terms)
+    vals = Vector{ComplexF64}(undef, n_terms)
+
+    for (k, (i_to, j_from, amp)) in enumerate(bilinear_terms)
+        cols[k] = j_from
+        rows[k] = i_to
+
+        vals[k] = amp
+    end
+
+    return sparse(rows, cols, vals, n_site, n_site)
 end
 
 
@@ -319,12 +363,9 @@ end
 """
 Compute Many-Body Chern Number using Fukui–Hatsugai–Suzuki Method on the Flux Torus
 ---
-For a non-interacting tight-binding model, we compute the **many-body Chern number**
-by discretising the flux-torus (θ₁, θ₂) ∈ [0,1]² and applying the Fukui–Hatsugai–Suzuki
-method to the many-body ground-state Slater determinant.
+For a non-interacting tight-binding model, we compute the **many-body Chern number** by discretising the flux-torus (θ₁, θ₂) ∈ [0,1]² and applying the Fukui–Hatsugai–Suzuki method to the many-body ground-state Slater determinant.
 
-The many-body Chern number of a non-interacting system equals the sum of the
-single-particle Chern numbers of all occupied bands.
+The many-body Chern number of a non-interacting system equals the sum of the single-particle Chern numbers of all occupied bands.
 
 - Args:
     - `tb_model::Real_Space_TightBinding_Model`: the tight-binding model (must have PBC in ALL directions)
@@ -353,8 +394,8 @@ function many_body_Chern_number_Fukui_Hatsugai_Suzuki(
             θ₂ = j / nθ
             θ_vec = [θ₁, θ₂]  # crystal-coordinate flux phases
 
-            H = build_realspace_tb_Hamiltonain(tb_model; twisted_phases_over_2π=θ_vec)
-            F = eigen(Hermitian(H))
+            H = build_real_space_tb_Hamiltonain(tb_model; twisted_phases_over_2π=θ_vec)
+            F = eigen(Hermitian(Matrix(H)))
             # Store the n_occ lowest eigenvectors
             occ_vecs[i+1, j+1] = F.vectors[:, 1:n_occ]
         end

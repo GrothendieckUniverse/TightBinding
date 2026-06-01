@@ -174,8 +174,7 @@ end
 """
     add_hoppings_by_graph_distance!(tb_model, distance, amplitude; is_hermitian=true)
 
-Add hoppings between ALL pairs of sites separated by graph distance `distance`
-on the underlying lattice graph, with a uniform complex `amplitude`.
+Add hoppings between ALL pairs of sites separated by graph distance `distance` on the underlying lattice graph, with a uniform complex `amplitude`.
 
 - `distance = 0`: on-site terms (chemical potential).
 - `distance = 1`: nearest-neighbor hoppings (one graph edge).
@@ -242,13 +241,9 @@ end
 """
     add_hoppings_by_graph_distance!(tb_model, distance, amplitude_func; is_hermitian=true)
 
-Add hoppings between ALL pairs of sites separated by graph distance `distance`,
-where the complex amplitude is computed by `amplitude_func(i_site, j_site)`.
+Add hoppings between ALL pairs of sites separated by graph distance `distance`, where the complex amplitude is computed by `amplitude_func(i_site, j_site)`. Here `amplitude_func` receives two linear site indices and must return a `Number`.
 
-This enables **direction-dependent** hoppings such as the complex NNN hoppings
-in the Haldane model.
-
-`amplitude_func` receives two linear site indices and must return a `Number`.
+This enables **direction-dependent** hoppings such as the complex NNN hoppings in the Haldane model.
 """
 function add_hoppings_by_graph_distance!(
     tb_model::Real_Space_TightBinding_Model,
@@ -355,8 +350,7 @@ Plot Hoppings and Sites of the `Real_Space_TightBinding_Model`
 - Args:
     - `tb_model::Real_Space_TightBinding_Model`: the real-space tight-binding model to be visualized
 ---
-Draws the lattice background (sites + faint graph edges) and overlays hoppings
-as **curved annotated arcs** so they do not overlap with the background.
+Draws the lattice background (sites + faint graph edges) and overlays hoppings as **curved annotated arcs** so they do not overlap with the background.
 
 - Bulk hoppings: solid steelblue arcs with amplitude labels.
 - Wrapped hoppings (across the PBC boundary): dashed tomato arcs with faded labels.

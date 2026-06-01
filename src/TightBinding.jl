@@ -4,6 +4,7 @@ using LinearAlgebra
 using MLStyle
 using CairoMakie
 using Test
+using SparseArrays
 
 using Graphs
 
@@ -18,7 +19,7 @@ include("uniform_grids.jl")
 export Uniform_Grids, initialize_uniform_grids
 
 include("utils.jl")
-export dual_basis_vec_mat, dual_basis_vec_list, build_Hk_crys, Chern_number_Fukui_Hatsugai_Suzuki, build_real_space_tb_Hamiltonain, many_body_Chern_number_Fukui_Hatsugai_Suzuki
+export dual_basis_vec_mat, dual_basis_vec_list, build_Hk_crys, Chern_number_Fukui_Hatsugai_Suzuki, generate_bilinear_terms, build_real_space_tb_Hamiltonain, many_body_Chern_number_Fukui_Hatsugai_Suzuki
 
 include("band_plot.jl")
 export plot_bands, plot_band_counter, find_1st_BZ_k_cart_list

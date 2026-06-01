@@ -39,7 +39,7 @@ building uniform momentum-space grids, computing band structures and (many-body)
 │                   │                            │                     │
 │                   │  • dual_basis_vec_mat/list │                     │
 │                   │  • build_Hk_crys (H(k))    │                     │
-│                   │  • build_Hamiltonian_matrix│                     │
+│                   │  • build_real_space_tb_Hamiltonain                     │
 │                   │  • Chern_number_FHS        │                     │
 │                   │  • many_body_Chern_number  │                     │
 │                   └────────────┬──────────────┘                     │
@@ -69,7 +69,7 @@ Real_Space_Lattice ──▶ Real_Space_TightBinding_Model
         │                   (single-particle Chern number)
         │
         ▼
-  build_Hamiltonian_matrix(tb, θ)
+  build_real_space_tb_Hamiltonain(tb; twisted_phases_over_2π=θ)
         │
         ▼
   many_body_Chern_number_Fukui_Hatsugai_Suzuki
@@ -118,7 +118,7 @@ number $w_d$ ($w_d = \pm1, \pm2, \dots$), it acquires the phase
 
 $$t_{ij} \mapsto t_{ij}\, \exp\!\big(i\, 2\pi\; \theta_d\, w_d\big).$$
 
-This is handled automatically by `build_Hamiltonian_matrix(tb, θ)`.  For open
+This is handled automatically by `build_real_space_tb_Hamiltonain(tb; twisted_phases_over_2π=θ)`.  For open
 directions, hoppings that would leave the sample are simply omitted.
 
 #### Flux = Momentum Shift
@@ -226,7 +226,7 @@ tb = initialize_real_space_tightbinding_model(lat_cyl; model_name = "Haldane")
 # ... add hoppings ...
 
 # Build H(θ) with twisted boundary at θ_x = 0.5 (half flux quantum)
-H_theta = build_Hamiltonian_matrix(tb, [0.5, 0.0])
+H_theta = build_real_space_tb_Hamiltonain(tb; twisted_phases_over_2π=[0.5, 0.0])
 
 # Sweep θ_x ∈ [0, 1] to observe spectral flow and edge-state pumping.
 # The number of states crossing the gap equals the Chern number × N_cells_y.
@@ -305,7 +305,7 @@ plot_bands(Hk_crys, k_data;
 | `plot_real_space_tightbinding_model` | Visualise hoppings on the lattice |
 | `initialize_uniform_grids` | Build uniform grids (momentum or flux space) |
 | `build_Hk_crys` | Construct H(k) Bloch Hamiltonian |
-| `build_Hamiltonian_matrix` | Build real-space H matrix with twisted BCs |
+| `build_real_space_tb_Hamiltonain`; twisted_phases_over_2π= Build real-space H matrix with twisted BCs |
 | `Chern_number_Fukui_Hatsugai_Suzuki` | Single-particle Chern number (FHS method) |
 | `many_body_Chern_number_Fukui_Hatsugai_Suzuki` | Many-body Chern number on flux torus |
 | `dual_basis_vec_mat` / `dual_basis_vec_list` | Compute dual (reciprocal) basis vectors |
@@ -339,7 +339,7 @@ The tests verify:
 ## Version History
 
 - **0.3.0** — Added `twisted_phases_over_2π`, flux-shifted `Uniform_Grids`,
-  `build_Hamiltonian_matrix`, `many_body_Chern_number_Fukui_Hatsugai_Suzuki`,
+  `build_real_space_tb_Hamiltonain`,; twisted_phases_over_2π=many_body_Chern_number_Fukui_Hatsugai_Suzuki`,
   and many-body Chern number tests.
 - **0.2.0** — Graph-based hopping generation, `allowed_bonds` filtering,
   Haldane NNN helper, lattice & model plotting.

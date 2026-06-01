@@ -199,7 +199,7 @@ end
 
 
 """
-Build Real-Space Hamiltonian Matrix with Twisted Boundary Conditions
+Build Real-Space TightBinding Hamiltonian Matrix with Twisted Boundary Conditions
 ---
 Construct the `n_site × n_site` real-space Hamiltonian matrix for a tight-binding model, with twisted boundary conditions specified by `twisted_phases_over_2π` (fallback to the stored value in `lattice.twisted_phases_over_2π` if not provided)
 
@@ -211,7 +211,7 @@ A hopping that crosses the periodic boundary in direction `d` with winding numbe
 - Returns:
     - `::Matrix{ComplexF64}` the `n_site × n_site` real-space Hamiltonian matrix
 """
-function build_Hamiltonian_matrix(tb_model::Real_Space_TightBinding_Model;
+function build_real_space_tb_Hamiltonain(tb_model::Real_Space_TightBinding_Model;
     twisted_phases_over_2π::Union{Nothing,Vector{Float64}}=nothing
 )::Matrix{ComplexF64}
     l = tb_model.lattice
@@ -353,7 +353,7 @@ function many_body_Chern_number_Fukui_Hatsugai_Suzuki(
             θ₂ = j / nθ
             θ_vec = [θ₁, θ₂]  # crystal-coordinate flux phases
 
-            H = build_Hamiltonian_matrix(tb_model; twisted_phases_over_2π=θ_vec)
+            H = build_realspace_tb_Hamiltonain(tb_model; twisted_phases_over_2π=θ_vec)
             F = eigen(Hermitian(H))
             # Store the n_occ lowest eigenvectors
             occ_vecs[i+1, j+1] = F.vectors[:, 1:n_occ]

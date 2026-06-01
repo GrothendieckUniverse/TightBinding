@@ -60,7 +60,7 @@ Constructor for `Real_Space_Lattice`
     - `sub_crys_list::Vector{<:Vector}`: list of sublattice positions _in crystal coordinates_
     - `lattice_name::String`: name of lattice. If this is set to be `"square"`, `"honeycomb"`, `"kagome"`, `"Lieb"`, or `"dice"`, it will override the above three arguments with the corresponding default values.)
     - `pbc_indicator::Vector{Bool}`: whether to apply periodic boundary condition in direction-i
-    - `twisted_phases_over_2π::Vector{Float64}`: twisted phases φ/(2π) along each periodic direction. Non-zero values only where `pbc_indicator[d]==true`. Defaults to all zeros.
+    - `twisted_phases_over_2π::Union{Nothing,Vector{Float64}}`: twisted phases `φ/(2π)` along each periodic direction. Default to `zeros(Float64, dim)`.
     - `allowed_bonds::Union{Nothing, Vector{Tuple{Int,Int}}}`: optional list of _allowed_ sublattice pairs `(sub_i, sub_j)` for graph construction. When `nothing` (default), all pairs are allowed (original Euclidean-distance algorithm). When provided, only edges between the specified sublattice pairs are filtered out. Indices are 1-based sublattice indices matching `sub_crys_list`.
 """
 function initialize_real_space_lattice(;
@@ -69,7 +69,7 @@ function initialize_real_space_lattice(;
     sub_crys_list::Vector{<:Vector}=[[0.0, 0.0]],
     lattice_name::String="",
     pbc_indicator::Vector{Bool}=[true, true],
-    twisted_phases_over_2π::Vector{Float64}=Float64[],
+    twisted_phases_over_2π::Union{Nothing,Vector{Float64}}=nothing,
     allowed_bonds::Union{Nothing,Vector{Tuple{Int,Int}}}=nothing,
 )::Real_Space_Lattice
     (brav_vec_list, sub_crys_list, allowed_bonds) = @match lattice_name begin
@@ -82,8 +82,7 @@ function initialize_real_space_lattice(;
     end
     dim = length(brav_vec_list)
 
-    # --- validate twisted_phases_over_2π -------------------------------------
-    if isempty(twisted_phases_over_2π)
+    if isnothing(twisted_phases_over_2π)
         twisted_phases_over_2π = zeros(Float64, dim)
     end
     @assert length(twisted_phases_over_2π) == dim "twisted_phases_over_2π must have length = dim = $dim."
